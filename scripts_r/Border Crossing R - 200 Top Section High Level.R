@@ -3,15 +3,16 @@ library(dplyr)
 library(ggplot2)
 library(broom)
 library(reader)
-library(scales)ƒ
+library(scales)
 library(hrbrthemes)
 library(forcats)
+library(mapproj)
 
 getwd()
-setwd("~/Documents/Projects/border_crossing_rstudio")
+setwd("~/Documents/Projects/usa-inbound_border_crossing")
 
 # Loading the data from CSV file, 
-data_00_base <- data.frame(reader("Border_Crossing_Entry_Data.csv"))
+data_00_base <- data.frame(reader("data/Border_Crossing_Entry_Data.csv"))
 # data_00_base <- data.frame(data_00_base)
 # cleanse commas (e.g. 12,000) from the field that holds the measures numeric values
 data_00_base$Value <- as.numeric(gsub("[^0-9.-]", "", data_00_base$Value))
@@ -84,6 +85,271 @@ data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
   # Left Join the Base table with supplemental information about the Measures to help with the presentation layer
   data_00_base_mod <- merge(x = data_00_base_mod, y = dim_measure, by = "Measure", all.x = TRUE)
 
+  
+  
+  ##########################################################################################################################################
+  # Use Me, maybe add some annotations, but this is a pretty good start for the overview graph
+  
+  world_map <- map_data("world") %>%
+      filter(region == "Canada" | region == "Mexico" | region == "USA")
+  
+  us_map <- map_data("state")
+  
+  data_10c_core <- data_00_base_mod %>%
+    filter(measure_summary == "Personal Vehicles" | measure_summary == "Pedestrians" | measure_summary == "Trucks" | measure_summary == "Buses" | measure_summary =="Trains") %>% 
+    filter(Year == "2023") %>%
+    dplyr::select(Year, Border_Code, Latitude, Longitude, Port.Name, State, Value) %>%
+    group_by(Year, Border_Code, Latitude, Longitude, Port.Name, State) %>%
+    summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+    mutate(size_class = cut(crossings,breaks=c(0,200000,400000,600000,1400000,Inf), labels=c("< 200K", "200K-400K", "400K-600K", "600K-1.4M", "1.4M-2.5M" ))) %>% 
+    mutate(shape_class = cut(crossings,breaks=c(0,200000,400000,600000,1400000,Inf), labels=c(4,3,21,22,23))) %>%
+    arrange(Border_Code, - crossings)  
+  
+    ggplot() + 
+    geom_polygon(data=world_map, aes(x=long, y=lat, fill=region, group=group), color = "gray60", alpha = .15) + 
+    geom_polygon(data=us_map, aes(x=long, y=lat, group=group), color = "white", alpha = 0) + 
+    geom_point(data=data_10c_core, aes(x=Longitude, y=Latitude, size = size_class, stroke = .75), shape = 22, color = "black", fill="orange") + 
+    guides(fill="none") + 
+    labs(title="North American Internationial Borders",
+         subtitle='US Internation Borders and Ports of Entry',
+         caption=c('Source: Bureau of Transportation Statistics'),
+         size = c("2023 Inbound Crossings", "per Port of Entry")) +
+    theme_void()+
+    theme(title=element_text(face='bold'),
+          legend.position = 'right') + 
+    ggtitle('North America') +
+    coord_map(xlim = c(-160, -55), ylim = c(15, 68))  
+  
+  
+
+    
+  ##########################################################################################################################################
+  # 10d for a series of high-level bar graphs
+  ##########################################################################################################################################
+
+    ##########################################################################################################################################
+    # Data gathering for 10d_core that will cover several high-level graphs
+    
+    data_10d_core <- data_00_base_mod %>%
+      filter(measure_summary == "Personal Vehicles" | measure_summary == "Pedestrians" | measure_summary == "Trucks" | measure_summary == "Buses" | measure_summary =="Trains") %>% 
+      filter(Year == "2023") %>%
+      dplyr::select(Year, Border_Code, State, Port.Name, Value) %>%
+      group_by(Year, Border_Code) %>%
+      summarise(ports_of_entry_cnt = n_distinct(Port.Name), crossings = sum(Value), states_on_border_cnt = n_distinct(State), .groups = 'keep') %>%
+      mutate(border_miles = ifelse(grepl("CAN", Border_Code, fixed = TRUE), 5525, 1954)) 
+    head(data_10d_core)
+    data_10d_core <- data_10d_core[,c(1,2,6,5,3,4)]
+    head(data_10d_core)
+
+    ##########################################################################################################################################
+    # 10d A) Year Summary (2023) Border Miles
+    
+    gg_10d_year_summary_border_miles <- 
+      ggplot(data_10d_core, 
+        aes(
+          x = Border_Code,
+          y = border_miles # reorder(measure_summary, annual_crossings, FUN = sum)
+        )) +
+      geom_col(
+        #aes(fill = mode_color_code,color = Border_Code)
+        aes(fill = Border_Code),
+        color = "gray50"
+      ) + 
+      geom_label(
+        aes(
+          label = paste(border_miles, "Miles")
+        ),
+        hjust = .5,
+        vjust = -.5,
+        fill = NA,
+        label.size = 0
+      ) +
+      # scale_fill_identity() +
+      # facet_grid(vars(Border_Code))  +
+      theme_minimal() +
+      theme(
+        axis.text.y = element_text(angle = 0),
+        panel.background = element_blank(),
+        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank()
+      ) +
+      scale_x_discrete(
+        name = "USA International Border with",
+        # labels = unit_format(unit = "M", scale = 1e-6)
+      ) +
+      labs(
+        title = "USA International Borders | Miles Covered | 2023",
+        y = "Miles of Border with USA",
+        subtitle = "US-CAN Border is ~3X longer than US-MEX",
+        caption = "Bureau of Transportation Statistics"
+      )    
+    plot(gg_10d_year_summary_border_miles)  
+
+    ##########################################################################################################################################
+    # 10d B) Year Summary (2023) Ports of Entry
+    # head(data_10d_core)
+    
+    gg_10d_year_summary_ports_of_entry <- 
+      ggplot(data_10d_core, 
+             aes(
+               x = Border_Code,
+               y = ports_of_entry_cnt
+             )) +
+      geom_col(
+        #aes(fill = mode_color_code,color = Border_Code)
+        aes(fill = Border_Code),
+        color = "gray50"
+      ) + 
+      geom_label(
+        aes(
+          label = ports_of_entry_cnt
+        ),
+        hjust = .5,
+        vjust = -.5,
+        fill = NA,
+        label.size = 0
+      ) +
+      # scale_fill_identity() +
+      # facet_grid(vars(Border_Code))  +
+      theme_minimal() +
+      theme(
+        axis.text.y = element_text(angle = 0),
+        panel.background = element_blank(),
+        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank()
+      ) +
+      scale_x_discrete(
+        name = "USA International Border with",
+        # labels = unit_format(unit = "M", scale = 1e-6)
+      ) +
+      labs(
+        title = "USA International Borders | Ports of Entry | 2023",
+        y = "Ports of Entry",
+        subtitle = "US-CAN has ~3X more Ports of Entry than US-MEX",
+        caption = "Bureau of Transportation Statistics"
+      )    
+    plot(gg_10d_year_summary_ports_of_entry)          
+    
+    ##########################################################################################################################################
+    # 10d C) Year Summary (2023) US States Covered
+    # head(data_10d_core)
+    
+    gg_10d_year_summary_states_covered <- 
+      ggplot(data_10d_core, 
+             aes(
+               x = Border_Code,
+               y = states_on_border_cnt
+             )) +
+      geom_col(
+        #aes(fill = mode_color_code,color = Border_Code)
+        aes(fill = Border_Code),
+        color = "gray50"
+      ) + 
+      geom_label(
+        aes(
+          label = states_on_border_cnt
+        ),
+        hjust = .5,
+        vjust = -.5,
+        fill = NA,
+        label.size = 0
+      ) +
+      # scale_fill_identity() +
+      # facet_grid(vars(Border_Code))  +
+      theme_minimal() +
+      theme(
+        axis.text.y = element_text(angle = 0),
+        panel.background = element_blank(),
+        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank()
+      ) +
+      scale_x_discrete(
+        name = "USA International Border with",
+        # labels = unit_format(unit = "M", scale = 1e-6)
+      ) +
+      labs(
+        title = "USA International Borders | US States Covered | 2023",
+        y = "Ports of Entry",
+        subtitle = "US-CAN covers ~3X more US States than US-MEX",
+        caption = "Bureau of Transportation Statistics"
+      )    
+    plot(gg_10d_year_summary_states_covered)            
+    
+    ##########################################################################################################################################
+    # 10d D) Year Summary (2023) US Volume of Border Crossings
+    # head(data_10d_core)
+  
+    gg_10d_year_summary_crossings <- 
+      ggplot(data_10d_core, 
+             aes(
+               x = Border_Code,
+               y = crossings
+             )) +
+      geom_col(
+        #aes(fill = mode_color_code,color = Border_Code)
+        aes(fill = Border_Code),
+        color = "gray50"
+      ) + 
+      geom_label(
+        aes(
+          label = paste(round(crossings / 1e6, 0), "M")
+        ),
+        hjust = .5,
+        vjust = -.5,
+        fill = NA,
+        label.size = 0
+      ) +
+      # scale_fill_identity() +
+      # facet_grid(vars(Border_Code))  +
+      theme_minimal() +
+      theme(
+        axis.text.y = element_text(angle = 0),
+        panel.background = element_blank(),
+        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank()
+      ) +
+      scale_x_discrete(
+        name = "USA International Border with",
+        # labels = unit_format(unit = "M", scale = 1e-6)
+      ) +    
+      scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +   
+      labs(
+        title = "USA International Borders | Volume of Border Crossings | 2023",
+        y = "Border Crossings into USA",
+        subtitle = "US-CAN covers ~3X more US States than US-MEX",
+        caption = "Bureau of Transportation Statistics"
+      )    
+    plot(gg_10d_year_summary_crossings)      
+
+  ##############################################################################
+  # This example doesn't work, but shows how to get it done
+  p4 <-
+    p1 + facet_wrap( ~ carb, nrow = 1) + theme(legend.position = "none") +
+    ggtitle("facetted plot")   
+  grid.arrange(p1, p2, nrow = 1)
+
+  ##############################################################################
+  # This is the block of code I need to get working
+  # https://cran.r-project.org/web/packages/egg/vignettes/Ecosystem.html  
+  grid.arrange(gg_10d_year_summary_border_miles, gg_10d_year_summary_ports_of_entry, gg_10d_year_summary_states_covered, gg_10d_year_summary_crossingsnrow = 1 )
+  
+  
+  
+  
+  
+  
+##########################################################################################################################################
+# 10a Data Gathering and Build ggplot2() 
+##########################################################################################################################################
+    
 # Round #1a
 # High-level summary of CAN vs MEX vs YEAR vs MODE
 data_10a_core <- data_00_base_mod %>%
@@ -173,9 +439,9 @@ plot(gg_10a_overview)
     summarise(annual_crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
     arrange(Border_Code, - annual_crossings)
 
-  data_10b_core
-  write.csv(data_10b_core, file = "chart_data.csv", row.names = FALSE)
-  write.table(data_10b_core, file = "chart_data.txt", row.names = FALSE, sep = "|")
+  # data_10b_core
+  # write.csv(data_10b_core, file = "chart_data.csv", row.names = FALSE)
+  # write.table(data_10b_core, file = "chart_data.txt", row.names = FALSE, sep = "|")
   
   data_10b_core_subtotal <- data_10b_core %>%
     group_by(Border_Code) %>%
@@ -288,4 +554,80 @@ plot(gg_10a_overview)
     labs(title = "Border Crossings by Mode and Country in 2023", color = "Border") 
   
   plot(gg_10b_year_summary)  
+
   
+  
+################################################################################
+# Pulling Map data together
+  
+
+
+  # data_10c_core <- data_00_base_mod %>%
+  #   filter(measure_summary == "Personal Vehicles" | measure_summary == "Pedestrians" | measure_summary == "Trucks" | measure_summary == "Buses" | measure_summary =="Trains") %>% 
+  #   filter(Year == "2023") %>%
+  #   dplyr::select(Year, Border_Code, Latitude, Longitude, Port.Name, State, measure_summary, mode_color_code, Value) %>%
+  #   group_by(Year, Border_Code, Latitude, Longitude, Port.Name, State, measure_summary, mode_color_code) %>%
+  #   summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+  #   arrange(Border_Code, - crossings)    
+head(data_10c_core)  
+
+# Setting population density classes
+br_mun$DensClass <- cut(br_mun$DensPop,breaks=c(0,5,50,500,5000,Inf),
+                        labels=c('< 5','5-50','50-500','500-5.000','> 5.000'))
+
+
+
+ggplot(data=world_map, aes(x=long, y=lat, fill=region, group=group)) + 
+  geom_polygon(color = "white") + 
+  guides(fill="none") + 
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()) + 
+  ggtitle('North America') + 
+  coord_fixed(1.3)
+
+################################################################################
+# !!! This works !!!
+
+ggplot(data=world_map, aes(x=long, y=lat)) + 
+  geom_polygon(aes(fill=region, group=group), color = "white") + 
+  guides(fill="none") + 
+  labs(title="North American Internationial Borders",
+       subtitle='Inbound Border Crossings into USA',
+       caption=c('Source: Bureau of Transportation Statistics'))+
+  theme_void()+
+  theme(title=element_text(face='bold'),
+        legend.position = 'bottom') + 
+  ggtitle('North America') +
+  coord_map(xlim = c(-160, -55), ylim = c(15, 68))
+
+
+  # coord_map("bonne", lat0 = 25)
+  # coord_map("conic", lat0 = 30)
+  # coord_map("orthographic")
+  # coord_map("gilbert")
+  # coord_map()
+  # coord_fixed(1.3)
+
+, group=group), color = "white"
+
+ggplot() + 
+  geom_point(data=data_10c_core, aes(x=Longitude, y=Latitude, fill=Port.Name, size = crossings, color = measure_summary)) + 
+  guides(fill="none") + 
+  labs(title="North American Internationial Borders",
+       subtitle='Inbound Border Crossings into USA',
+       caption=c('Source: Bureau of Transportation Statistics'))+
+  theme_void()+
+  theme(title=element_text(face='bold'),
+        legend.position = 'bottom') + 
+  ggtitle('North America') +
+  coord_map(xlim = c(-160, -55), ylim = c(15, 68))
+
+
+
+ggplot() + 
+  geom_polygon(data=us_map, aes(x=long, y=lat, group=group), color = "white", fill = "gray90")
+
+
+
+
+
