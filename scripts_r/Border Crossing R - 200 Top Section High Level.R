@@ -156,35 +156,38 @@ data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
         color = "gray50"
       ) + 
       geom_label(
-        aes(
-          label = paste(border_miles, "Miles")
-        ),
+        aes(label = scales::comma(border_miles)),  
         hjust = .5,
         vjust = -.5,
         fill = NA,
         label.size = 0
       ) +
-      # scale_fill_identity() +
-      # facet_grid(vars(Border_Code))  +
       theme_minimal() +
       theme(
         axis.text.y = element_text(angle = 0),
         panel.background = element_blank(),
-        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        # strip.background = element_rect(colour = "gray50", fill = "gray90"),
         panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
-        panel.grid.major.y = element_blank(),
+        panel.grid.major.y = element_line(color = "gray90",
+                                           size = 0.25,
+                                           linetype = 1),
+        panel.grid.minor.y = element_blank(),        
+        panel.grid.major.x = element_blank(),        
         panel.grid.minor.x = element_blank()
       ) +
       scale_x_discrete(
         name = "USA International Border with",
         # labels = unit_format(unit = "M", scale = 1e-6)
       ) +
+      # scale_y_continuous(breaks = seq(0, 8000, by = 2000)) +
+      ylim(-1,8000)  +
       labs(
         title = "USA International Borders | Miles Covered | 2023",
         y = "Miles of Border with USA",
         subtitle = "US-CAN Border is ~3X longer than US-MEX",
         caption = "Bureau of Transportation Statistics"
-      )    
+      ) + 
+      guides(fill="none")
     plot(gg_10d_year_summary_border_miles)  
 
     ##########################################################################################################################################
@@ -219,19 +222,27 @@ data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
         panel.background = element_blank(),
         strip.background = element_rect(colour = "gray50", fill = "gray90"),
         panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
-        panel.grid.major.y = element_blank(),
+        panel.grid.major.y = element_line(color = "gray90",
+                                          size = 0.25,
+                                          linetype = 1),
+        panel.grid.minor.y = element_blank(),        
+        panel.grid.major.x = element_blank(),        
         panel.grid.minor.x = element_blank()
       ) +
       scale_x_discrete(
         name = "USA International Border with",
         # labels = unit_format(unit = "M", scale = 1e-6)
       ) +
+      scale_y_continuous(breaks = seq(0, 120, by = 30)
+                         ,limits= c(0,120)
+      ) +
       labs(
         title = "USA International Borders | Ports of Entry | 2023",
         y = "Ports of Entry",
         subtitle = "US-CAN has ~3X more Ports of Entry than US-MEX",
         caption = "Bureau of Transportation Statistics"
-      )    
+      )    + 
+      guides(fill="none")
     plot(gg_10d_year_summary_ports_of_entry)          
     
     ##########################################################################################################################################
@@ -266,19 +277,25 @@ data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
         panel.background = element_blank(),
         strip.background = element_rect(colour = "gray50", fill = "gray90"),
         panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
-        panel.grid.major.y = element_blank(),
+        panel.grid.major.y = element_line(color = "gray90",
+                                          size = 0.25,
+                                          linetype = 1),
+        panel.grid.minor.y = element_blank(),        
+        panel.grid.major.x = element_blank(),        
         panel.grid.minor.x = element_blank()
       ) +
       scale_x_discrete(
         name = "USA International Border with",
         # labels = unit_format(unit = "M", scale = 1e-6)
       ) +
+      scale_y_continuous(breaks = seq(0, 16, by = 4), limits= c(0,16)) +
       labs(
         title = "USA International Borders | US States Covered | 2023",
-        y = "Ports of Entry",
-        subtitle = "US-CAN covers ~3X more US States than US-MEX",
+        y = "# of US States on the Border",
+        subtitle = "US-CAN covers 2.5X more US States than US-MEX",
         caption = "Bureau of Transportation Statistics"
-      )    
+      )    + 
+      guides(fill="none")
     plot(gg_10d_year_summary_states_covered)            
     
     ##########################################################################################################################################
@@ -313,20 +330,26 @@ data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
         panel.background = element_blank(),
         strip.background = element_rect(colour = "gray50", fill = "gray90"),
         panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
-        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),        
+        panel.grid.major.x = element_blank(),        
         panel.grid.minor.x = element_blank()
       ) +
       scale_x_discrete(
         name = "USA International Border with",
         # labels = unit_format(unit = "M", scale = 1e-6)
       ) +    
-      scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +   
+      scale_y_continuous(breaks = seq(0, 16, by = 4), limits= c(0,16)) +
+      scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)
+                         ,breaks = seq(0, 200000000, by = 50000000)
+                         ,limits= c(0,200000000)
+                         ) +   
       labs(
         title = "USA International Borders | Volume of Border Crossings | 2023",
         y = "Border Crossings into USA",
-        subtitle = "US-CAN covers ~3X more US States than US-MEX",
+        subtitle = "US-MEX has ~5X more Border Crossings than US-CAN",
         caption = "Bureau of Transportation Statistics"
-      )    
+      )    + 
+      guides(fill="none")
     plot(gg_10d_year_summary_crossings)      
 
   ##############################################################################

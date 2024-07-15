@@ -2,36 +2,259 @@
 title: "USA Inbound Border Crossing Data"
 author: "Marc Alexander"
 date: "2024-07-10"
-output: html_document
+output: 
+  html_document: 
+
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+  # knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+  # suppressWarnings({ })   
+
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(reader)
+library(scales)
+library(hrbrthemes)
+library(forcats)
+library(mapproj)
+library(gridExtra)
+library(ggh4x)
+
+getwd()
+# setwd("~/Documents/Projects/usa-inbound_border_crossing")
+
+# Loading the data from CSV file, 
+data_00_base <- data.frame(reader("~/Documents/Projects/usa-inbound_border_crossing/data/Border_Crossing_Entry_Data.csv"))
+# data_00_base <- data.frame(data_00_base)
+# cleanse commas (e.g. 12,000) from the field that holds the measures numeric values
+data_00_base$Value <- as.numeric(gsub("[^0-9.-]", "", data_00_base$Value))
+
+# Add some features to the BASE data frame.  This is the BASE that all sub-queries (data frames) will pull from.
+data_00_base_mod <- data_00_base %>%
+  mutate(Border_Code = ifelse(grepl("Canada", Border, fixed = TRUE), "CAN", "MEX")) %>%
+  separate(Date, c("Month", "Year"), remove = FALSE)  %>%
+  # mutate(Measure = factor(Measure, order = TRUE, levels = c("Bus Passengers","Buses","Pedestrians","Personal Vehicle Passengers","Personal Vehicles","Rail Containers Empty","Rail Containers Loaded","Train Passengers","Trains","Truck Containers Empty","Truck Containers Loaded","Trucks"))) 
+  # mutate(Measure = factor(Measure, order = TRUE, levels = c("Personal Vehicles","Personal Vehicle Passengers","Pedestrians","Trucks","Truck Containers Loaded","Truck Containers Empty","Buses","Bus Passengers","Trains","Train Passengers","Rail Containers Loaded","Rail Containers Empty"))) 
+  mutate(measure_summary = factor(Measure, order = TRUE, levels = c("Personal Vehicles","Personal Vehicle Passengers","Pedestrians","Trucks","Truck Containers Loaded","Truck Containers Empty","Buses","Bus Passengers","Trains","Train Passengers","Rail Containers Loaded","Rail Containers Empty"))) %>%
+  mutate(Measure = factor(Measure, order = TRUE, levels = c("Trains","Train Passengers","Rail Containers Loaded","Rail Containers Empty","Buses","Bus Passengers","Trucks","Truck Containers Loaded","Truck Containers Empty","Pedestrians","Personal Vehicles","Personal Vehicle Passengers"))) %>%
+  # mutate(Year_num) = as.integer(Year)
+  mutate(state_delete_me = State)
+  
+data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
+
+  # Augment with a dimension table to help control colors and sorting in the presentation tier
+  # This is all stuff I decided on when building the Tableau dashboard.  I want to follow that lead with R to make it easier to compare/contrast output side-by-side
+  dim_measure <- data.frame(
+    Measure=c("Bus Passengers","Buses","Pedestrians","Personal Vehicle Passengers","Personal Vehicles","Rail Containers Empty","Rail Containers Loaded","Train Passengers","Trains","Truck Containers Empty","Truck Containers Loaded","Trucks")
+    ,mode_main_sort=c(8,7,3,2,1,11,10,12,9,6,5,4)
+    ,mode_color_code=c("#C799BC","#8074A8","#4E79A7","#F59C3C","#C14F22","#CDCECD","#5B6570","#89C8CC","#848E93","#F4D166","#B2C25B","#34844A")
+  )
+  
+  # Left Join the Base table with supplemental information about the Measures to help with the presentation layer
+  data_00_base_mod <- merge(x = data_00_base_mod, y = dim_measure, by = "Measure", all.x = TRUE)
+  
+  # A little controller for the colors of the countries
+  cols_border_crossing <- c("CAN" = "#F8756D", "MEX" = "#02BFC4")
+  cols_world <- c("Canada" = "#F8756D", "Mexico" = "#02BFC4")
+  cols_usa <- c("Canada" = "#F8756D", "Mexico" = "#02BFC4")
+##########################################################################################################################################
+# 10d for high-level Map graphs
+##########################################################################################################################################
+  
+  ##########################################################################################################################################
+  # Map Datasets
+  world_map <- map_data("world") %>%
+      filter(region == "Canada" | region == "Mexico" | region == "USA")
+  
+  us_map <- map_data("state")
+  
+  ##########################################################################################################################################
+  # DATA: Border Crossing Dataset (aggregated to proper Grain)  
+  data_10c_core <- data_00_base_mod %>%
+    filter(measure_summary == "Personal Vehicles" | measure_summary == "Pedestrians" | measure_summary == "Trucks" | measure_summary == "Buses" | measure_summary =="Trains") %>% 
+    filter(Year == "2023") %>%
+    dplyr::select(Year, Border_Code, Latitude, Longitude, Port.Name, State, Value) %>%
+    group_by(Year, Border_Code, Latitude, Longitude, Port.Name, State) %>%
+    summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+    mutate(size_class = cut(crossings,breaks=c(0,200000,400000,600000,1400000,Inf), labels=c("< 200K", "200K-400K", "400K-600K", "600K-1.4M", "1.4M-2.5M" ))) %>% 
+    mutate(shape_class = cut(crossings,breaks=c(0,200000,400000,600000,1400000,Inf), labels=c(4,3,21,22,23))) %>%
+    arrange(Border_Code, - crossings)  
+  ##########################################################################################################################################
+  # GRAPH: Border Crossing Dataset (aggregated to proper Grain)  
+  suppressWarnings({ 
+    gg_00a_map_intl_borders <- ggplot() + 
+      geom_polygon(data=world_map, aes(x=long, y=lat, fill=region, group=group), color = "white", alpha = .9) + 
+      geom_polygon(data=us_map, aes(x=long, y=lat, group=group), color = "white", alpha = 0, linewidth = .1) + 
+      geom_point(data=data_10c_core, aes(x=Longitude, y=Latitude, size = size_class, stroke = .75), shape = 21, color = "black", fill="gray90") + 
+      guides(fill="none") + 
+      labs(title="North American Internationial Borders",
+           subtitle='US International Borders and Ports of Entry',
+           caption=c('Source: Bureau of Transportation Statistics'),
+           size = c("2023 Inbound Crossings", "per Port of Entry")) +
+        theme_minimal() +
+        theme(
+          axis.text.y = element_text(angle = 0),
+          axis.title.y = element_blank(),
+          panel.background = element_blank(),
+          strip.background = element_rect(colour = "gray50", fill = "gray90"),
+          panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+          panel.grid.minor.y = element_blank(),        
+          panel.grid.major.x = element_blank(),        
+          panel.grid.minor.x = element_blank()
+        ) +
+      # theme_void()+
+      # theme(title=element_text(face='bold'),
+      #       legend.position = 'right') + 
+      # ggtitle('North America') + +
+        labs(
+          title = "USA International Borders | Mapped",
+          # y = data_10d_core_melt$measure,
+          subtitle = "Ports of Entry with the size of the mark mapped to # Border Crossings in 2023",
+          caption = "Bureau of Transportation Statistics"
+        ) +
+      scale_colour_manual(values = cols_world) +
+      coord_map(xlim = c(-160, -55), ylim = c(15, 68))    
+  })
+```
+
+```{r echo=FALSE, fig.width = 10, fig.height=4}
+##########################################################################################################################################
+# Facet Wrap version of the Bar Graphs
+##########################################################################################################################################    
+
+##########################################################################################################################################
+# DATA: Data gathering for 10d_core that will cover several high-level graphs
+
+# Main Data Wrangling to get to the right section and grain
+data_10d_core <- data_00_base_mod %>%
+  filter(measure_summary == "Personal Vehicles" | measure_summary == "Pedestrians" | measure_summary == "Trucks" | measure_summary == "Buses" | measure_summary =="Trains") %>% 
+  filter(Year == "2023") %>%
+  dplyr::select(Year, Border_Code, State, Port.Name, Value) %>%
+  group_by(Year, Border_Code) %>%
+  summarise(ports_of_entry_cnt = n_distinct(Port.Name), crossings = sum(Value), states_on_border_cnt = n_distinct(State), .groups = 'keep') %>%
+  mutate(border_miles = ifelse(grepl("CAN", Border_Code, fixed = TRUE), 5525, 1954)) 
+
+# change the column order to be a little more readable (nice, but not required)
+data_10d_core <- data_10d_core[,c(1,2,6,5,3,4)]
+
+# Do some additional clean-up to the columns so we can cleanse after the column_names are melted to be rows
+data_10d_core_rename <- data_10d_core
+colnames(data_10d_core_rename) <- c("Year", "Border_Code", "Miles_of_Border", "States_on_Border", "Ports_of_Entry", "Border_Crossings")
+data_10d_core_melt <- data_10d_core_rename %>%
+  pivot_longer(!c(Year,Border_Code),names_to = "measure",values_to = "value") %>%
+  mutate(measure = gsub("_"," ",measure)) %>%
+  mutate(measure = factor(measure, order = TRUE, levels = c("Miles of Border", "Ports of Entry", "States on Border", "Border Crossings"))) %>%
+  mutate(col_fill_color = as.factor(ifelse(grepl("CAN", Border_Code, fixed = TRUE), "#F8756D", "#33C051")))
+
+  # Use this to create a custom discrete color scale that matches the map above
+  cols_border_crossing<- c("CAN" = "#F8756D", "MEX" = "#33C051", "USA" = "#73A6FF")
+
+##########################################################################################################################################
+# GRAPH
+
+gg_10d__facet <- ggplot(data_10d_core_melt, 
+                        aes(
+                          x = data_10d_core_melt$Border_Code,
+                          y = value
+                        )) +
+  geom_col(
+    #aes(fill = mode_color_code,color = Border_Code)
+    # aes(fill = factor(data_10d_core_melt$col_fill_color)),
+    aes(fill = factor(data_10d_core_melt$Border_Code)),
+    color = "gray10",
+    alpha = 1
+  ) + 
+  # geom_label(
+  #   aes(label = scales::comma(data_10d_core_melt$value)
+  #       # label = value # paste(round(crossings / 1e6, 0), "M")
+  #   ),
+  #   hjust = .5,
+  #   vjust = -.5,
+  #   fill = NA,
+  #   label.size = 0
+  # ) +
+  geom_text(
+    aes(label = scales::comma(data_10d_core_melt$value))
+    ,vjust = -.8,
+    ,size = 3.8
+  ) + 
+  # scale_fill_identity() +
+  facet_wrap(vars(measure), nrow = 1, scales = "free_y")  +
+  # facetted_pos_scales(
+  #   y = list(
+  #     vars(measure) == "Miles of Border" ~ scale_y_continuous(breaks = seq(0, 8000, by = 2000), limits= c(0,8000)),
+  #     vars(measure) == "Points of Entry" ~ scale_y_continuous(breaks = seq(0, 120, by = 30), limits= c(0,120)),
+  #     vars(measure) == "States on Border" ~ scale_y_continuous(breaks = seq(0, 16, by = 4), limits= c(0,16)),
+  #     vars(measure) == "Border Crossings" ~ scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6), breaks = seq(0, 200000000, by = 50000000),limits= c(0,200000000))
+  #   )
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(angle = 0),
+    axis.title.y = element_blank(),
+    panel.background = element_blank(),
+    strip.background = element_rect(colour = "gray50", fill = "gray90"),
+    panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+    panel.grid.minor.y = element_blank(),        
+    panel.grid.major.x = element_blank(),        
+    panel.grid.minor.x = element_blank()
+  ) +
+  scale_x_discrete(
+    name = "USA Border" #"data_10d_core_melt$Border_Code,
+    # labels = unit_format(unit = "M", scale = 1e-6)
+  ) +
+  # scale_fill_manual(values =  data_10d_core_melt$col_fill_color) + #cols_border_crossing) +
+  scale_fill_manual(values = cols_border_crossing) +  
+  facetted_pos_scales(
+    y = list(
+      measure == "Miles of Border" ~ scale_y_continuous(breaks = seq(0, 8000, by = 2000),limits= c(0,8000)),
+      measure == "Ports of Entry" ~ scale_y_continuous(breaks = seq(0, 120, by = 30),limits= c(0,120)), 
+      measure == "States on Border" ~ scale_y_continuous(breaks = seq(0, 16, by = 4), limits= c(0,16)) ,
+      measure == "Border Crossings" ~ scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6),breaks = seq(0, 200000000, by = 50000000),limits= c(0,200000000)) 
+    )
+  ) +
+  labs(
+    title = "USA International Borders | Overview",
+    y = data_10d_core_melt$measure,
+    subtitle = "Border Crossings is for 2023",
+    caption = "Bureau of Transportation Statistics"
+  )    + 
+  guides(fill="none")
+
+      
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 10, fig.height=5}
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+#   suppressWarnings({ 
+#     # 
+# })   
+  gg_00a_map_intl_borders
+    # 
 ```
 
 ### US-Canada Border
 The United States and **Canada** share the world's longest internation border, which is 5,525 miles long.  It spans 13 U.S states and has 84 ports of entry, with 1/3 of the northern border comprised of just the eastern flank of Alaska.
 
 ### US-Mexico Border
-The United States border with **Mexico** is considerably shorter at 1,954 miles.  It covers 4 states with 28 ports of entry.  
+The United States border with **Mexico** is considerably shorter at 1,954 miles.  It covers 4 states with 28 ports of entry.  The **US-Mexico** border is about 1/3 as long, has 1/3 the Ports of Entry, covers 1/4 the number of states, but has 5X more border crossings than the **US-Canada** border.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 10, fig.height=5}
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+#   suppressWarnings({ 
+#     # 
+# })  
+  gg_10d__facet
+    # 
+```
 
 ### In-bound Crossing Volume and Density by Border
-The US-Canada Border is 3X longer than the US-Mexico Border and has 3X more ports of entry to cover the distance.  In spite of the shorter border, the US-Mexico Border processes 4X more pedestrians, passengers, trucks, buses, and trains than the US-Canada Border
+The US-Canada Border is 3X longer than the US-Mexico Border and has 3X more ports of entry to cover the distance.  In spite of the shorter border, the US-Mexico border has 4X more border crossings than the US-Canada Border. 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
