@@ -23,6 +23,8 @@ library(hrbrthemes)
 library(forcats)
 library(mapproj)
 library(gridExtra)
+library(gtable)
+library(ggpubr)
 library(ggh4x)
 
 getwd()
@@ -62,6 +64,20 @@ data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
   cols_border_crossing <- c("CAN" = "#F8756D", "MEX" = "#02BFC4")
   cols_world <- c("Canada" = "#F8756D", "Mexico" = "#02BFC4")
   cols_usa <- c("Canada" = "#F8756D", "Mexico" = "#02BFC4")
+  
+```
+### Preface
+An analysis of data published by the Bureau of Transportation Statistics ([about the dataset](https://data.bts.gov/Research-and-Statistics/Border-Crossing-Entry-Data/keg4-3bc2/about_data) and [data dictionary](https://bit.ly/4aBKJg0)).  The dataset has monthly totals for the volume of border crossings into the **United States** at each Port of Entry.  The data is available from 1997 to March 2024, which covers some interesting events that definitely impacted traffic into the US (e.g. 9/11, and COVID-19).  The data is provided for each mode of border crossing:
+
+1. **Passenger Vehicles** (totals are available for Vehicles and Passengers)
+2. **Pedestrians** (no lower level details for Pedestrians)
+3. **Trucks** (Trucks, Containers Loaded, and Containers Empty)
+4. **Buses** (Buses and Passengers)
+5. **Trains** (Trains, Passengers, Containers Loaded, and Containers Empty)
+
+This is an **explanatory** style analysis done in R. An complementary **exploratory** dashboard built with Tableau is available [here](https://bit.ly/4ch0NW2).
+
+```{r echo=FALSE, fig.width = 10, fig.height=4}
 ##########################################################################################################################################
 # 10d for high-level Map graphs
 ##########################################################################################################################################
@@ -100,6 +116,7 @@ data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
         theme(
           axis.text.y = element_text(angle = 0),
           axis.title.y = element_blank(),
+          legend.position="bottom",
           panel.background = element_blank(),
           strip.background = element_rect(colour = "gray50", fill = "gray90"),
           panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
@@ -228,14 +245,135 @@ gg_10d__facet <- ggplot(data_10d_core_melt,
       
 ```
 
+```{r echo=FALSE, message=FALSE, warning=FALSE,}
+  ##########################################################################################################################################
+  # DATA: Border Crossing Dataset (aggregated to proper Grain)  
+  data_10e_core <- data_00_base_mod %>%
+    filter(measure_summary == "Personal Vehicles" | measure_summary == "Pedestrians" | measure_summary == "Trucks" | measure_summary == "Buses" | measure_summary =="Trains") %>% 
+    filter(Year == "2023") %>%
+    dplyr::select(Year, Border_Code, State, Value) %>%
+    group_by(Year, Border_Code, State) %>%
+    summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+    mutate(color_class = cut(crossings,breaks=c(0,1000000, 10000000, 25000000,50000000,100000000,Inf), labels=c("< 1M", "1M-10M", "10M-25M", "25M-50M", "50M-100M", "100M+" ))) %>% 
+    # mutate(shape_class = cut(crossings,breaks=c(0,200000,400000,600000,1400000,Inf), labels=c(4,3,21,22,23))) %>%
+    mutate(region = tolower(State))  %>%
+    arrange(Border_Code, desc(crossings),  .by_group = FALSE)
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 10, fig.height=5}
+
+    ##########################################################################################################################################
+    # DATA: 2023 CAN Border Crossings by State  
+    
+    data_10e_bar_can <- data_10e_core %>%
+      filter(Border_Code == "CAN") %>%
+      arrange(desc(crossings)) 
+
+    ##########################################################################################################################################
+    # GRAPH: 2023 CAN Border Crossings by State          
+    
+    gg_10e_bar_us_state_crossings_can <- ggplot(data = data_10e_bar_can) +
+      geom_col(aes(
+        x=reorder(State, crossings, FUN = sum),
+        # reorder(iss$spray, iss$count, FUN = mean)
+        y=crossings
+        ),
+        fill = "#F8756D",
+        color = "gray50"
+      ) + 
+      geom_text(
+        aes(
+          x=reorder(State, crossings, FUN = sum)
+          ,y=crossings
+          ,label = paste(round(crossings / 1e6, 1), "M"))
+          ,vjust = 0
+          ,hjust = -.5
+          ,size = 3.8
+      ) +
+      coord_flip() +
+      theme_minimal() +
+      theme(
+        axis.text.y = element_text(angle = 0),
+        panel.background = element_blank(),
+        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.x = element_blank()
+      ) +
+      scale_y_continuous(
+        labels = unit_format(unit = "M", scale = 1e-6),
+        breaks = seq(0, 60000000, by = 15000000),
+        limits= c(0,70000000)
+      ) +
+      labs(title = "2023 Border Crossings from CAN by US State",
+        x = "US State",
+        y = "2023 Border Crossings (CAN)"
+      ) 
+      
+      ##########################################################################################################################################
+      # DATA: 2023 MEX Border Crossings by State  
+      
+      data_10e_bar_mex <- data_10e_core %>%
+        filter(Border_Code == "MEX") %>%
+        arrange(desc(crossings)) 
+      
+      ##########################################################################################################################################
+      # GRAPH: 2023 MEX Border Crossings by State          
+      
+      gg_10e_bar_us_state_crossings_mex <- ggplot(data = data_10e_bar_mex) +
+        geom_col(aes(
+          x=reorder(State, crossings, FUN = sum),
+          # reorder(iss$spray, iss$count, FUN = mean)
+          y=crossings
+        ),
+        fill = "#33C051",
+        color = "gray50"
+        ) + 
+        geom_text(
+          aes(
+            x=reorder(State, crossings, FUN = sum)
+            ,y=crossings
+            ,label = paste(round(crossings / 1e6, 1), "M"))
+          ,vjust = 0
+          ,hjust = -.5
+          ,size = 3.8
+        ) +
+        coord_flip() +
+        theme_minimal() +
+        theme(
+          # axis.text.y = element_text(angle = 0),
+          panel.background = element_blank(),
+          strip.background = element_rect(colour = "gray50", fill = "gray90"),
+          panel.border = element_rect(colour = "gray50", fill = NA, size = .2), 
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.x = element_blank()
+        ) +
+        scale_y_continuous(
+          #name = "Inbound Border Crossings",
+          labels = unit_format(unit = "M", scale = 1e-6),
+          breaks = seq(0, 60000000, by = 15000000),
+          limits= c(0,70000000)
+        ) +
+        labs(title = "2023 Border Crossings from MEX by US State",
+          x = "US State",
+          y = "2023 Border Crossings (MEX)"
+          ) 
+      
+      
+```      
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 12, fig.height=7}
   knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 
 #   suppressWarnings({ 
 #     # 
 # })   
-  gg_00a_map_intl_borders
+
+# p2 <- grid.arrange(gg_10e_bar_us_state_crossings_mex, gg_10e_bar_us_state_crossings_can, nrow=2)
+# grid.arrange(gg_00a_map_intl_borders, p2, ncol = 2)
+ggarrange(gg_00a_map_intl_borders,
+          grid.arrange(gg_10e_bar_us_state_crossings_can,gg_10e_bar_us_state_crossings_mex,  nrow=2, heights = c(3.2, 1.8)), 
+          ncol = 2
+          ,widths = c(7,5)
+          )
     # 
 ```
 
