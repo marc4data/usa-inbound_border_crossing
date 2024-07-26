@@ -1,0 +1,47 @@
+```{r child_000_data_wrangling, echo=FALSE}
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+##########################################################################################################################################
+# Analysis Part 000 
+##########################################################################################################################################
+
+##########################################################################################################################################
+# Main Data Wrangling
+##########################################################################################################################################
+  
+# Loading the data from CSV file, 
+data_00_base <- data.frame(reader(here::here("data", "Border_Crossing_Entry_Data.csv")))
+# data_00_base <- data.frame(data_00_base)
+# cleanse commas (e.g. 12,000) from the field that holds the measures numeric values
+data_00_base$Value <- as.numeric(gsub("[^0-9.-]", "", data_00_base$Value))
+
+# Add some features to the BASE data frame.  This is the BASE that all sub-queries (data frames) will pull from.
+data_00_base_mod <- data_00_base %>%
+  mutate(Border_Code = ifelse(grepl("Canada", Border, fixed = TRUE), "CAN", "MEX")) %>%
+  separate(Date, c("Month", "Year"), remove = FALSE)  %>%
+  # mutate(Measure = factor(Measure, order = TRUE, levels = c("Bus Passengers","Buses","Pedestrians","Personal Vehicle Passengers","Personal Vehicles","Rail Containers Empty","Rail Containers Loaded","Train Passengers","Trains","Truck Containers Empty","Truck Containers Loaded","Trucks"))) 
+  # mutate(Measure = factor(Measure, order = TRUE, levels = c("Personal Vehicles","Personal Vehicle Passengers","Pedestrians","Trucks","Truck Containers Loaded","Truck Containers Empty","Buses","Bus Passengers","Trains","Train Passengers","Rail Containers Loaded","Rail Containers Empty"))) 
+  mutate(measure_summary = factor(Measure, order = TRUE, levels = c("Personal Vehicles","Personal Vehicle Passengers","Pedestrians","Trucks","Truck Containers Loaded","Truck Containers Empty","Buses","Bus Passengers","Trains","Train Passengers","Rail Containers Loaded","Rail Containers Empty"))) %>%
+  mutate(Measure = factor(Measure, order = TRUE, levels = c("Trains","Train Passengers","Rail Containers Loaded","Rail Containers Empty","Buses","Bus Passengers","Trucks","Truck Containers Loaded","Truck Containers Empty","Pedestrians","Personal Vehicles","Personal Vehicle Passengers"))) %>%
+  # mutate(Year_num) = as.integer(Year)
+  mutate(state_delete_me = State) %>%
+  mutate(crossing_date = as.Date(paste(Month," 1, ",Year), format = "%b %d, %Y"))
+  
+data_00_base_mod$Year_num <- as.integer(data_00_base_mod$Year)
+
+  # Augment with a dimension table to help control colors and sorting in the presentation tier
+  # This is all stuff I decided on when building the Tableau dashboard.  I want to follow that lead with R to make it easier to compare/contrast output side-by-side
+  dim_measure <- data.frame(
+    Measure=c("Bus Passengers","Buses","Pedestrians","Personal Vehicle Passengers","Personal Vehicles","Rail Containers Empty","Rail Containers Loaded","Train Passengers","Trains","Truck Containers Empty","Truck Containers Loaded","Trucks")
+    ,mode_main_sort=c(8,7,3,2,1,11,10,12,9,6,5,4)
+    ,mode_color_code=c("#C799BC","#8074A8","#4E79A7","#F59C3C","#C14F22","#CDCECD","#5B6570","#89C8CC","#848E93","#F4D166","#B2C25B","#34844A")
+  )
+  
+  # Left Join the Base table with supplemental information about the Measures to help with the presentation layer
+  data_00_base_mod <- merge(x = data_00_base_mod, y = dim_measure, by = "Measure", all.x = TRUE)
+  
+  # A little controller for the colors of the countries
+  cols_border_crossing <- c("CAN" = "#F8756D", "MEX" = "#02BFC4")
+  cols_world <- c("Canada" = "#F8756D", "Mexico" = "#02BFC4")
+  cols_usa <- c("Canada" = "#F8756D", "Mexico" = "#02BFC4")
+  
+```  

@@ -1,0 +1,41 @@
+``` {r child_210_data_wrangling, echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+##############################################################################################
+# Data for CAN cyclical
+data_30a_can_pvehicles <- data_00_base_mod %>%
+  dplyr::select(Border_Code, Measure, Year, crossing_date, mode_color_code, Value) %>%
+  filter(Border_Code == "CAN" & Measure == "Personal Vehicles" & Year >= 1997 &  Year <= 2024) %>%
+  group_by(Border_Code, Measure, crossing_date, mode_color_code) %>%
+  summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+  arrange(crossing_date)
+
+#############################################################################################
+# Graph of CAN decomposed cyclical pattern
+can_pv_ts <- ts(data_30a_can_pvehicles$crossings, frequency=12, start = c(1997,1))
+can_pv_ts_decompose <- decompose(can_pv_ts)
+
+##############################################################################################
+# Data for MEX cyclical
+data_30a_mex_pvehicles <- data_00_base_mod %>%
+  dplyr::select(Border_Code, Measure, Year, crossing_date, mode_color_code, Value) %>%
+  filter(Border_Code == "MEX" & Measure == "Personal Vehicles" & Year >= 1997 &  Year <= 2024) %>%
+  group_by(Border_Code, Measure, crossing_date, mode_color_code) %>%
+  summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+  arrange(crossing_date)
+
+#############################################################################################
+# Graph of MEX decomposed cyclical pattern
+mex_pv_ts <- ts(data_30a_mex_pvehicles$crossings, frequency=12, start = c(1997,1))
+mex_pv_ts_decompose <- decompose(mex_pv_ts)
+
+my_plot.decomposed.ts = function(x, title="", col="", sub="",...) {
+  xx <- x$x
+  if (is.null(xx)) 
+    xx <- with(x, if (type == "additive") 
+      random + trend + seasonal
+      else random * trend * seasonal)
+  plot(cbind(observed = xx, trend = x$trend, seasonal = x$seasonal, random = x$random), 
+       main=title, col=col, sub=sub, ...)
+}
+
+```

@@ -1,0 +1,77 @@
+``` {r child_230_data_wrangling, echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+  ##########################################################################################################################################
+  # Line Chart that shows Monthly Border Crossings
+  ##########################################################################################################################################
+
+  ##########################################################################################################################################
+  # DATA 
+  data_30a_trucks <- data_00_base_mod %>%
+    dplyr::select(crossing_date, Border_Code, Measure, Value, mode_main_sort, mode_color_code) %>%
+    filter(Measure == "Trucks") %>%
+    group_by(crossing_date, Border_Code, Measure, mode_main_sort, mode_color_code) %>%
+    summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+    arrange(Border_Code, crossing_date, mode_main_sort, Measure) 
+  
+  ##########################################################################################################################################
+  # GRAPH
+  
+  gg_30a_trucks <- ggplot(data_30a_trucks) + 
+    geom_line(
+      aes(x = crossing_date
+          ,y=crossings
+          ,color = mode_color_code
+          )
+        ,linewidth = .7
+  ) +
+    facet_grid(,vars(Border_Code)) +
+    scale_color_identity(guide = "legend"
+                        ,name = "Transportation Mode"
+                        ,breaks = c("#34844A")
+                        ,labels = c("Trucks")
+    ) +
+    scale_y_continuous(name = "US Inbound Border Crossings (Trucks)",
+                       # breaks = scales::breaks_extended(8),
+                       # labels = scales::label_number()  
+                       labels = unit_format(unit = "M", scale = 1e-6)
+                       ,breaks = seq(0, 1000000, by = 250000)
+                       ,minor_breaks = seq(0, 1000000, by = 125000)
+                       ,limits= c(0,1000000) 
+    ) +
+    #  scale_x_continuous(name = "Time (Monthly Observations)"
+    #                      ,breaks = seq(1990, 2030, by = 10)
+    # #                     ,minor_breaks = seq(1996, 2024, by = 1)
+    #                      ,limits= c(1996,2024)
+    # ) +
+    # scale_x_date(limits = as.Date(c("1996-01-01", "2024-12-01")),date_breaks = "5 years", date_minor_breaks = "1 year", , date_labels = "%Y", offset = 1) +
+    scale_x_date(limits = as.Date(c("1996-01-01", "2024-12-01"))
+         ,breaks = breaks_width("5 years", offset = "1 year")
+         ,date_minor_breaks = "1 year"
+         ,date_labels = "%Y") +
+    theme_minimal() +
+    theme(panel.border = element_rect(colour = "gray50", fill = NA, linewidth = .2),
+          panel.background = element_rect(fill = "white",
+                                          linewidth = 0.5, linetype = "solid",
+                                          colour = "gray80"),
+          panel.grid.major = element_line(linewidth = 0.4, linetype = 'solid',
+                                          colour = "gray90"),
+          panel.grid.minor = element_line(linewidth = 0.2, linetype = 'solid',
+                                          colour = "gray95"),
+          # axis.text.x = element_text(angle=0, hjust = .5),
+          # axis.title.y = element_blank(),
+          strip.background = element_rect(colour = "gray50", fill = "gray90"),
+          legend.position="bottom",
+          legend.title = element_text(size = 12, vjust = .5, face = "bold"),
+          legend.text = element_text(size = 10, vjust = .5),
+          plot.caption = element_text(hjust=0, size=11)
+    ) +
+    labs(
+      x = 'Monthly Observations',
+      # y = 'Annual Inbound Border Crossings',
+      title = 'US Inbound Border Crossings by Country by Month (Trucks)',
+      color="Transportation Mode",
+      # subtitle = 'Color indicates the Mode of Transportation',
+      caption = 'Fig 8: Monthly Border Crossings for Trucks by Country'
+    )
+```

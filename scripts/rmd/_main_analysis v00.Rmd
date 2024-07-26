@@ -1,0 +1,190 @@
+---
+title: "USA Inbound Border Crossing Data"
+author: "Marc Alexander"
+date: "2024-07-10"
+output: 
+  html_document: 
+
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(reader)
+library(scales)
+library(hrbrthemes)
+library(forcats)
+library(mapproj)
+library(gridExtra)
+library(gtable)
+library(ggpubr)
+library(ggh4x)
+library(here)
+
+```
+
+```{r 000_base_data_wrangling, child = here::here("scripts","rmd","analysis-part000.Rmd"), fig.width = 10, fig.height=4} 
+```      
+```{r 100_level_data_wrangling, echo=FALSE, child = here::here("scripts","rmd", "analysis-part100.Rmd"), message=FALSE, warning=FALSE}
+```
+```{r 200_level_data_wrangling, echo=FALSE, child = here::here("scripts","rmd", "analysis-part200.Rmd"), message=FALSE, warning=FALSE}
+```
+```{r 210_base_data_wrangling_personal_vehicle, child = here::here("scripts","rmd","analysis-part210_personal_vehicle.Rmd")}
+```    
+```{r 220_base_data_wrangling_data_pedestrian, child = here::here("scripts","rmd","analysis-part220_pedestrian.Rmd")}
+```    
+```{r 230_base_data_wrangling_truck, child = here::here("scripts","rmd","analysis-part230_truck.Rmd")}
+``` 
+```{r 240_base_data_wrangling_bus, child = here::here("scripts","rmd","analysis-part240_bus.Rmd")}
+```    
+```{r 250_base_data_wrangling_train, child = here::here("scripts","rmd","analysis-part250_train.Rmd")}
+```     
+
+## Preface
+An analysis of data published by the Bureau of Transportation Statistics on the number, type, and location of border crossings into the USA.  Data is reported monthly since 1997.  Here are supporting [details](https://data.bts.gov/Research-and-Statistics/Border-Crossing-Entry-Data/keg4-3bc2/about_data) and [data dictionary](https://bit.ly/4aBKJg0) for the dataset.  
+
+This is an **explanatory** style analysis done in R. A complementary **exploratory** dashboard built with Tableau is available [here](https://bit.ly/4ch0NW2).
+
+## USA International Borders Overview
+This section gives a high-level overview of the **US-Canada** and **US-Mexico** borders, the **Ports of Entry** spread across those borders, and where the volume of border crossings happen.
+
+```{r 100_level_graph, echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 12, fig.height=7}
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+ggarrange(gg_00a_map_intl_borders,
+          NULL,
+          grid.arrange(gg_10e_bar_us_state_crossings_can,gg_10e_bar_us_state_crossings_mex,  nrow=2, heights = c(3.2, 1.8)), 
+          ncol = 3
+          ,widths = c(7,.1,4.9)
+          )
+ 
+```
+
+#### US-Canada Border
+The United States and **Canada** share the world's longest international border, which is 5,525 miles long.  It has 84 ports of entry and spans 13 US states, with 1/3 of the northern border comprised of just the eastern flank of Alaska. Fig 1A shows the distribution of the Ports of Entry along the **CAN** and **MEX** borders. Fig 1B shows the which states on the **Canada** border had the most border crossings in 2023.
+
+#### US-Mexico Border
+The United States border with **Mexico** is considerably shorter at 1,954 miles.  It has 28 ports of entry and covers 4 US states.  The **US-Mexico** border is about 1/3 as long, has 1/3 the Ports of Entry, covers 1/4 the number of states, but has 5X more border crossings than the **US-Canada** border.
+
+#### In-bound Crossing Volume and Density by Border
+The US-Canada Border is 3X longer than the US-Mexico Border and has 3X more ports of entry to cover the distance.  In spite of the shorter border, the US-Mexico border has 4X more border crossings than the US-Canada Border. Fig 2 demonstrates how **US-Canada** is bigger, longer, and has more ports of entry, but far outpaced by the volume of crossings through the **US-Mexico** border.
+
+```{r 100_level_facet_graph, echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 12, fig.height=5}
+  gg_10d__facet
+
+```
+
+***
+
+## Modes of Border Crossing 
+
+The Bureau of Transportation Statistics tracks 5 primary modes of border crossings. Most of the transportation modes have lower level details available.
+
+1. **Passenger Vehicles** (totals are available for Vehicles and Passengers)
+2. **Pedestrians** (no lower level details for Pedestrians)
+3. **Trucks** (Trucks, Containers Loaded, and Containers Empty)
+4. **Buses** (Buses and Passengers)
+5. **Trains** (Trains, Passengers, Containers Loaded, and Containers Empty)
+
+Fig 3 shows a significant disparity between the volume of Personal Vehicles crossing between Canada and Mexico.  It also shows the near absence of Pedestrian crossings from Canada. The northern border isn't favorable for foot traffic.  The towns are too spread out to travel by foot combined with the harsh winter weather contribute to the significantly lower volumes of foot traffic from Canada.  On the Mexican border, there are several border crossings with large cities (e.g. San Diego, El Paso, Nogales, Brownsville) that make Pedestrian crossing easy and productive.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 10, fig.height=5}
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+  plot(gg_10b_year_summary)
+```
+
+#### Annual Border Crossings over the Decades
+
+Border crossings from Mexico are consistently higher volume than from Canada by a factor of at least 2X.  Personal Vehicles is the largest mode of crossing and has been for the full length of time covered in the dataset.  Pedestrian traffic is significant for the Mexican border.  Truck traffic is perceptible in the graph.  Buses and Trains are at a much smaller scale and need to viewed using a different scale to see any underlying patterns.  Subsequent sections provide details on each primary mode of border crossing.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 10, fig.height=5}
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+  plot(gg_10a_overview)
+```
+
+#### Monthly Oberservations and Changes vs Time
+
+As seen in Fig 5, things get interesting when we plot data at the monthly observations because it sheds some light on some of the lower-level patterns.  The contrast between the Personal Vehicle crossings from Canada vs Mexico is particularly interesting.  The Personal Vehicle traffic from Canada is very cyclical within each year, peaking in the warm summer months. The cyclical pattern isn't so distinct in the Mexico Personal Vehicle crossings, but if you look really close the last month of each year is the biggest month of the year.  I'm sure the Decembers spike is tied to family visits for the holidays.  Maybe not so easy to see is it's generally followed by the lowest volume month of the year.  The decomposed time series provides a better view into the seasonal pattern of MEX Personal Vehicle crossings.  
+
+COVID-19 had significant impact on border crossing for about 3 years, but has largely recovered.  9/11 is is visible for Personal Vehicle crossings from Mexico.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'left', fig.width = 10, fig.height=5}
+  knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+  plot(gg_20a_overview)
+```
+
+#### Personal Vehicles
+Reference Fig 5 for a good comparison of Personal Vehicle crossings between CAN and MEX.
+
+##### Decomposing the Time Series of Personal Vehicle Crossings 
+This section will breakdown the time series data into Trend, Season, and Random component (not necessarily graphed on the same y-axis scale).  Those components are considered additive and collectively explain the Observed values. Here's a [video](https://www.youtube.com/watch?v=VrJYOItZYLQ) that explains how to interpret the decomposed time series graphs.
+
+##### Canada
+
+The Personal Vehicles crossing into the US has a strong seasonal component that is slower in the winter months and peaks in the summer.  There's an overall downward trend and then a huge hiccup when COVID hit. 9/11 is pretty visible in the decomposed time series **random** section.
+
+``` {r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center', fig.width = 10, fig.height=6}
+
+  my_plot.decomposed.ts(can_pv_ts_decompose, "Decomposition of CAN Personal Vehicle Crossings Time Series","#C14F22")
+
+```
+
+##### Mexico
+
+The Personal Vehicles crossing from Mexico have a less obvious cyclical pattern.  The most distinct seasonal pattern is a spike of activity in December followed by a trough in January.  You have to look very close to see it in the **observed** section.  The scale on the **seasonal** section is small, so it exagerates the trend and makes the drop from Dec to Jan very visible.  The overall trend oscialates over the decades and then has a distinct drop caused by COVID.  The attack on the World Trade Center buildings on 9/11 was pretty strong Personal Vehicles, but recovered very quickly compared to the impact of COVID.
+
+``` {r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center', fig.width = 10, fig.height=6}
+
+  my_plot.decomposed.ts(mex_pv_ts_decompose, "Decomposition of MEX Personal Vehicle Crossings Time Series","#C14F22")
+
+  # par(mfrow = c(1, 2))
+  # my_plot.decomposed.ts(can_pv_ts_decompose, "Decomposition of CAN Personal Vehicle Crossings Time Series","#C14F22")
+  # my_plot.decomposed.ts(mex_pv_ts_decompose, "Decomposition of MEX Personal Vehicle Crossings Time Series","#C14F22")
+
+  # ggarrange(
+  #     my_plot.decomposed.ts(can_pv_ts_decompose, "Decomposition of CAN Personal Vehicle Crossings Time Series","#C14F22")
+  #     ,my_plot.decomposed.ts(mex_pv_ts_decompose, "Decomposition of MEX Personal Vehicle Crossings Time Series","#C14F22")
+  #     ,ncol=2
+  #     )
+
+```
+
+### Pedestrian
+
+``` {r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center', fig.width = 10, fig.height=5}
+
+  plot(gg_220a_pedestrian)
+
+```
+
+### Trucks
+
+Trucks crossings are a little interesting.  Canada trucking activity stepped down from the 2000 decade and into the 2010 decade.  Since 2010 it's been pretty flat.   There does seem to be a cyclical trend within the years. Trucking volume from Mexico has increased over the decades and is 250,000 trucks per month when data collection started, to now doubling that with monthly traffic in the 600,000 range.  There's also a weird drop for both borders in November 2008.  Some research found a pilot program initiated ISA-PS [link](https://www.federalregister.gov/documents/2008/10/29/E8-25551/importer-self-assessment-product-safety-pilot) in that timeframe that shifted more responsibility on the inbound trucks to vet the safety of the products they ship. I believe the ramp-up of that program hindered truck crossings for about a year before everybody got on board and things smoothed out.  
+
+``` {r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center', fig.width = 10, fig.height=5}
+
+  plot(gg_30a_trucks)
+
+```
+
+### Buses
+
+``` {r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center', fig.width = 10, fig.height=5}
+
+  plot(gg_240a_bus)
+
+```
+
+### Trains
+
+``` {r echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center', fig.width = 10, fig.height=5}
+
+  plot(gg_250a_train)
+
+```

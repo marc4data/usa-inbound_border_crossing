@@ -1,0 +1,174 @@
+```{r child_200_data_wrangling, echo=FALSE}
+##########################################################################################################################################
+# Analysis Part 200
+##########################################################################################################################################
+
+################################################################################
+# Round #1b
+# High-level summary of CAN vs MEX vs Mode for 2023
+
+# Query the BASE dataset and shape (aggregate) for #1b (Border Crossing Volume by Mode by Country for a given year)
+data_10b_core <- data_00_base_mod %>%
+  filter(Measure == "Personal Vehicles" | Measure == "Pedestrians" | Measure == "Trucks" | Measure == "Buses" | Measure =="Trains") %>%
+  filter(Year == "2023") %>%
+  dplyr::select(Border_Code, Measure, mode_color_code, Value) %>%
+  group_by(Border_Code, Measure, mode_color_code) %>%
+  summarise(annual_crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+  arrange(Border_Code, - annual_crossings)
+
+# Build #1b graph
+# 2024-06-27 
+gg_10b_year_summary <- ggplot(data_10b_core) + 
+  geom_col(aes(x=Measure, y=annual_crossings, fill = mode_color_code)) +
+  geom_text(aes(x=Measure, y=annual_crossings, label = paste(round(annual_crossings / 1e6, 2), "M")), vjust = 0.5, hjust = -0.2) +
+  coord_flip() +
+  scale_fill_identity() +
+  facet_grid(vars(Border_Code, )) + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=0),
+        panel.background = element_blank(),
+        strip.background = element_rect(colour="gray50", fill="gray90"),
+        panel.border = element_rect(colour = "gray50", fill=NA, size=1),
+        panel.grid.minor.y = element_blank(),        
+        panel.grid.major.y = element_blank(),        
+        panel.grid.minor.x = element_blank(),
+        plot.caption = element_text(hjust=0, size=11)
+  ) +
+  #  theme(strip.text.y = element_text(size = 8, colour = "red", angle = 90)) +
+  #  theme(strip.background.y = element_text(size = 8, colour = "red", angle = 90)) +
+  scale_y_continuous(name = "US Inbound Border Crossings",
+                     # breaks = scales::breaks_extended(8),
+                     # labels = scales::label_number()  
+                     labels = unit_format(unit = "M", scale = 1e-6)
+                     ,breaks = seq(0, 100000000, by = 25000000)
+                     ,limits= c(0,100000000)  
+  ) + 
+  labs(title = "Border Crossings by Mode and Country in 2023"
+       ,x = "Transportation Mode"
+       ,caption = "Fig 3: 2023 Border Crossings by Mode and Country"
+       )
+
+##########################################################################################################################################
+# 10a Data Gathering and Build ggplot2() 
+##########################################################################################################################################
+
+# Round #1a
+# High-level summary of CAN vs MEX vs YEAR vs MODE
+data_10a_core <- data_00_base_mod %>%
+  dplyr::select(Year_num, Border_Code, Measure, Value, mode_main_sort, mode_color_code) %>%
+  filter(Measure == "Personal Vehicles" | Measure == "Pedestrians" | Measure == "Trucks" | Measure == "Buses" | Measure =="Trains") %>%
+  group_by(Year_num, Border_Code, Measure, mode_main_sort, mode_color_code) %>%
+  summarise(annual_crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+  arrange(Border_Code, Year_num, mode_main_sort, Measure) 
+
+gg_10a_overview <- ggplot(data_10a_core) + 
+  geom_col(
+    aes(x=Year_num
+        ,y=annual_crossings
+        ,color = "gray80"
+        ,fill = mode_color_code)) +
+  scale_fill_identity(guide = "legend"
+                      ,name = "Transportation Mode"
+                      ,breaks = c("#8074A8","#848E93","#34844A","#4E79A7","#C14F22")
+                      ,labels = c("Buses","Trains","Trucks","Pedestrians","Personal Vehicls")
+  )+ 
+  scale_color_identity() +
+  facet_grid(, vars(Border_Code)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=0, hjust = .5),
+        panel.background = element_rect(fill = "white",
+                                        colour = "gray80",
+                                        size = 0.5, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                        colour = "gray90"),
+        panel.grid.minor = element_line(size = 0, linetype = 'solid',
+                                        colour = "white"),
+        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        legend.position="bottom",
+        legend.title = element_text(size = 14, vjust = .5, face = "bold"),
+        legend.text = element_text(size = 14, vjust = .5),
+        plot.caption = element_text(hjust=0, size=11)
+  ) +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)
+                     ,breaks = seq(0, 160000000, by = 40000000)
+                     ,limits= c(0,160000000)  
+  ) + 
+  labs(
+    x = 'Country / Year', 
+    y = 'Annual Inbound Border Crossings',
+    title = 'US Inbound Border Crossings by Country by Year',
+    color="Transportation Mode",
+    # subtitle = 'Color indicates the Mode of Transportation',
+    caption = 'Fig 4: Annual Border Crossings by Mode and Country (Stacked)'
+  ) 
+
+##########################################################################################################################################
+# Line Chart that shows Monthly Border Crossings
+##########################################################################################################################################
+
+##########################################################################################################################################
+# DATA 
+data_20a_core <- data_00_base_mod %>%
+  dplyr::select(crossing_date, Border_Code, Measure, Value, mode_main_sort, mode_color_code) %>%
+  filter(Measure == "Personal Vehicles" | Measure == "Pedestrians" | Measure == "Trucks" | Measure == "Buses" | Measure =="Trains") %>%
+  group_by(crossing_date, Border_Code, Measure, mode_main_sort, mode_color_code) %>%
+  summarise(crossings = sum(Value), record_cnt = n(), .groups = 'keep') %>%
+  arrange(Border_Code, crossing_date, mode_main_sort, Measure) 
+
+##########################################################################################################################################
+# GRAPH
+
+gg_20a_overview <- ggplot(data_20a_core) + 
+  geom_line(
+    aes(x = crossing_date
+        ,y=crossings
+        ,color = mode_color_code)
+        ,linewidth = .7
+  ) +
+  facet_grid(,vars(Border_Code)) +
+  scale_color_identity(guide = "legend"
+                       ,name = "Transportation Mode"
+                       ,breaks = c("#34844A","#4E79A7","#8074A8","#848E93","#C14F22")
+                       ,labels = c("Trucks","Pedestrians","Buses","Trains","Personal Vehicles")
+  ) +
+  scale_y_continuous(name = "US Inbound Border Crossings (Monthly)",
+                     # breaks = scales::breaks_extended(8),
+                     # labels = scales::label_number()  
+                     labels = unit_format(unit = "M", scale = 1e-6)
+                     ,breaks = seq(0, 10000000, by = 5000000)
+                     ,minor_breaks = seq(0, 10000000, by = 1000000)
+                     ,limits= c(0,10000000) 
+  ) +
+  #  scale_x_continuous(name = "Time (Monthly Observations)"
+  #                      ,breaks = seq(1990, 2030, by = 10)
+  # #                     ,minor_breaks = seq(1996, 2024, by = 1)
+  #                      ,limits= c(1996,2024)
+  # ) +
+  # scale_x_date(limits = as.Date(c("1996-01-01", "2024-12-01")),date_breaks = "5 years", date_minor_breaks = "1 year", , date_labels = "%Y", offset = 1) +
+  scale_x_date(limits = as.Date(c("1996-01-01", "2024-12-01")), breaks = breaks_width("5 years", offset = "1 year"), date_minor_breaks = "1 year", date_labels = "%Y") +
+  theme_minimal() +
+  theme(panel.border = element_rect(colour = "gray50", fill = NA, size = .2),
+        panel.background = element_rect(fill = "white",
+                                        size = 0.5, linetype = "solid",
+                                        colour = "gray80"),
+        panel.grid.major = element_line(size = 0.4, linetype = 'solid',
+                                        colour = "gray90"),
+        panel.grid.minor = element_line(size = 0.2, linetype = 'solid',
+                                        colour = "gray95"),
+        # axis.text.x = element_text(angle=0, hjust = .5),
+        # axis.title.y = element_blank(),
+        strip.background = element_rect(colour = "gray50", fill = "gray90"),
+        legend.position="bottom",
+        legend.title = element_text(size = 14, vjust = .5, face = "bold"),
+        legend.text = element_text(size = 14, vjust = .5),
+        plot.caption = element_text(hjust=0, size=11)
+  ) + 
+  labs(
+    x = 'Country by Year and Month', 
+    # y = 'Annual Inbound Border Crossings',
+    title = 'US Inbound Border Crossings by Country by Month',
+    color="Transportation Mode",
+    # subtitle = 'Color indicates the Mode of Transportation',
+    caption = 'Fig 5: Monthly Border Crossings by Mode and Country'
+  ) 
+```  
